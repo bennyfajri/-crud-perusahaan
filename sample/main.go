@@ -14,7 +14,7 @@ import (
 var db *sql.DB
 var err error
 
-// Book struct (Model)
+// Customer struct (Model) ...
 type Customer struct {
 	CustomerID   string `json:"CustomerID"`
 	CompanyName  string `json:"CompanyName"`
@@ -77,20 +77,16 @@ func createCustomer(w http.ResponseWriter, r *http.Request) {
 		CustomerID := r.FormValue("CustomerID")
 		CompanyName := r.FormValue("CompanyName")
 
-		stmt, err := db.Prepare("INSERT INTO customers (CustomerID,CompanyName) VALUES(?,?)")
-
-		if err != nil {
-			panic(err.Error())
-		}
+		stmt, err := db.Prepare("INSERT INTO customers (CustomerID,CompanyName) VALUES (?,?)")
 
 		_, err = stmt.Exec(CustomerID, CompanyName)
 
 		if err != nil {
-			panic(err.Error())
+			fmt.Fprintf(w, "Data Duplicate")
+		} else {
+			fmt.Fprintf(w, "Data Created")
 		}
 
-		fmt.Fprintf(w, "Date Created")
-		//http.Redirect(w, r, "/", 301)
 	}
 }
 
@@ -150,7 +146,7 @@ func updateCustomer(w http.ResponseWriter, r *http.Request) {
 		_, err = stmt.Exec(newCompanyName, params["id"])
 
 		if err != nil {
-			panic(err.Error())
+			fmt.Fprintf(w, "Data not found or Request error")
 		}
 
 		fmt.Fprintf(w, "Customer with CustomerID = %s was updated", params["id"])
@@ -162,22 +158,67 @@ func deleteCustomer(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	stmt, err := db.Prepare("DELETE FROM customers WHERE CustomerID = ?")
 
-	if err != nil {
-		panic(err.Error())
-	}
 	_, err = stmt.Exec(params["id"])
 
 	if err != nil {
-		panic(err.Error())
+		fmt.Fprintf(w, "delete failed")
 	}
 
 	fmt.Fprintf(w, "Customer with ID = %s was deleted", params["id"])
 }
 
+func getPost(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var customers []Customer
+
+	CustomerID := r.FormValue("CustomerID")
+	CompanyName := r.FormValue("CompanyName")
+
+	sql := `SELECT
+				CustomerID,
+				IFNULL(CompanyName,''),
+				IFNULL(ContactName,'') ContactName,
+				IFNULL(ContactTitle,'') ContactTitle,
+				IFNULL(Address,'') Address,
+				IFNULL(City,'') City,
+				IFNULL(Country,'') Country,
+				IFNULL(Phone,'') Phone ,
+				IFNULL(PostalCode,'') PostalCode
+			FROM customers WHERE CustomerID = ? AND CompanyName = ?`
+
+	result, err := db.Query(sql, CustomerID, CompanyName)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer result.Close()
+
+	var customer Customer
+
+	for result.Next() {
+
+		err := result.Scan(&customer.CustomerID, &customer.CompanyName, &customer.ContactName,
+			&customer.ContactTitle, &customer.Address, &customer.City, &customer.Country,
+			&customer.Phone, &customer.PostalCode)
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		customers = append(customers, customer)
+	}
+
+	json.NewEncoder(w).Encode(customers)
+
+}
+
 // Main function
 func main() {
 
-	db, err = sql.Open("mysql", "root:nadipw@tcp(127.0.0.1:3306)/pay_aggr")
+	db, err = sql.Open("mysql", "root:nadipw@tcp(127.0.0.1:3306)/northwind")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -193,6 +234,9 @@ func main() {
 	r.HandleFunc("/customers", createCustomer).Methods("POST")
 	r.HandleFunc("/customers/{id}", updateCustomer).Methods("PUT")
 	r.HandleFunc("/customers/{id}", deleteCustomer).Methods("DELETE")
+
+	//New
+	r.HandleFunc("/getcustomer", getPost).Methods("POST")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8080", r))
