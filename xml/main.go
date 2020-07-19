@@ -80,6 +80,8 @@ func getCustomers(w http.ResponseWriter, r *http.Request) {
 	}
 	//Tugas insert kan ke table Customer
 
+	//Tugas insert kan ke table Order
+
 }
 
 func main() {
